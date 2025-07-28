@@ -15,7 +15,7 @@ export default function AIForGoodPage() {
       <div className="max-w-4xl mx-auto">
         {/* Hero Section */}
         <div className="mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold mb-6">AI for Good</h1>
+          <h1 className="text-4xl md:text-5xl font-bold mb-6">AI for a better purpose,better life!</h1>
           <p className="text-xl text-muted-foreground mb-8">
             Leveraging AI to address global challenges through cutting-edge research and innovative software solutions. A comprehensive program that combines rigorous academic exploration with practical applications to create positive social impact and ensure AI benefits humanity.
           </p>
