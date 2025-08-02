@@ -122,9 +122,9 @@ export default function Home() {
                 <MessageSquare className="h-10 w-10" />
               </div>
               <h3 className="text-xl font-bold mb-2">BOTSPEAK!!</h3>
-              <p className="text-muted-foreground mb-4">
+              {/* <p className="text-muted-foreground mb-4">
                 Exploring the fascinating world of AI through hands-on projects and in-depth demos—no rules, just curiosity-driven innovation.
-              </p>
+              </p> */}
               <Link href="/botspeak" className="text-sm font-medium underline underline-offset-4 hover:text-foreground">
                 Learn more
               </Link>
