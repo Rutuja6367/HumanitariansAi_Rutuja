@@ -16,9 +16,9 @@ export default function BotspeakPage() {
         {/* Hero Section */}
         <div className="mb-16">
           <h1 className="text-4xl md:text-5xl font-bold mb-6">Botspeak</h1>
-          <p className="text-xl text-muted-foreground mb-8">
+          {/* <p className="text-xl text-muted-foreground mb-8">
             Empowering individuals through the transformative power of AI fluency, fostering effective human-AI collaboration. An innovative program that combines theoretical frameworks with practical skills to enhance your ability to work with AI systems.
-          </p>
+          </p> */}
           <div className="relative w-full aspect-video rounded-lg overflow-hidden mb-8">
             <iframe
               className="absolute top-0 left-0 w-full h-full"
