@@ -129,8 +129,22 @@ export default function Home() {
                 Learn more
               </Link>
             </div>
+               {/* Blog */}
+      <div className="border p-8 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 hover:shadow-lg transition-shadow">
+        <div className="mb-4">
+          <MessageSquare className="h-10 w-10" /> {/* Replace with a blog icon if preferred */}
+        </div>
+        <h3 className="text-xl font-bold mb-2">BLOG</h3>
+        <p className="text-muted-foreground mb-4">
+          Dive into thought pieces, tutorials, and tech explorations—stories that inspire, inform, and ignite new ideas.
+        </p>
+        <Link href="/blog" className="text-sm font-medium underline underline-offset-4 hover:text-foreground">
+          Read blog
+        </Link>
+      </div>
           </div>
         </div>
+        
       </section>
 
       {/* Donate Section */}
