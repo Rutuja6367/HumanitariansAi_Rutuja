@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "title": "Applications Now Open for 2023 Humanitarians AI Fellows Program",
+    "slug": "fellows-program-2023",
+    "excerpt": "Join our prestigious fellowship program and work on cutting-edge AI projects for social good.",
+    "content": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+    "image": "/placeholder.svg?height=300&width=400",
+    "category": "education",
+    "date": "2023-09-15",
+    "author": "Dr. Emma Chen"
+  },
+  {
+    "id": 2,
+    "title": "New PredictaBio Project Aims to Revolutionize Protein Synthesis",
+    "slug": "predictabio-project",
+    "excerpt": "Our healthcare team launches a groundbreaking AI model for protein structure prediction.",
+    "content": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+    "image": "/placeholder.svg?height=300&width=400",
+    "category": "healthcare",
+    "date": "2023-08-22",
+    "author": "Dr. James Wilson"
+  }
+]
