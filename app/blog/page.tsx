@@ -8,10 +8,12 @@ import { Button } from '@/components/ui/button'
 interface BlogPost {
   id?: number
   title: string
+  slug: string
   content: string
   category: string
   author: string
   date: string
+  excerpt?: string
   image?: string
 }
 
@@ -19,10 +21,12 @@ const BlogPage = () => {
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>([])
   const [newBlog, setNewBlog] = useState<BlogPost>({
     title: '',
+    slug: '',
     content: '',
     category: '',
     author: '',
     date: new Date().toISOString().split('T')[0],
+    excerpt: '',
     image: '',
   })
   const [loading, setLoading] = useState(false)
@@ -46,40 +50,53 @@ const BlogPage = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setNewBlog((prev) => ({ ...prev, [name]: value }))
+
+    setNewBlog((prev) => ({
+      ...prev,
+      [name]: value,
+      slug: name === 'title' ? generateSlug(value) : prev.slug,
+    }))
   }
 
-const handleSubmit = async () => {
-  if (!newBlog.title || !newBlog.content || !newBlog.category || !newBlog.author) {
-    alert('Please fill in all required fields.')
-    return
+  const generateSlug = (title: string) =>
+    title
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
+
+  const handleSubmit = async () => {
+    const { title, content, category, author } = newBlog
+    if (!title || !content || !category || !author) {
+      alert('Please fill in all required fields.')
+      return
+    }
+
+    const blogToInsert = Object.fromEntries(
+      Object.entries(newBlog).filter(([_, v]) => v !== undefined && v !== '')
+    )
+
+    const { data, error } = await supabase
+      .from('blogs')
+      .insert([blogToInsert])
+      .select()
+
+    if (error) {
+      console.error('Insert error:', error)
+    } else {
+      setBlogPosts((prev) => [data[0], ...prev])
+      setNewBlog({
+        title: '',
+        slug: '',
+        content: '',
+        category: '',
+        author: '',
+        date: new Date().toISOString().split('T')[0],
+        excerpt: '',
+        image: '',
+      })
+    }
   }
-
-const blogToInsert = Object.fromEntries(
-  Object.entries(newBlog).filter(([_, v]) => v !== undefined)
-)
-
-
-  const { data, error } = await supabase
-    .from('blogs')
-    .insert([blogToInsert])
-    .select()
-
-  if (error) {
-    console.error('Insert error:', error)
-  } else {
-    setBlogPosts((prev) => [data[0], ...prev])
-    setNewBlog({
-      title: '',
-      content: '',
-      category: '',
-      author: '',
-      date: new Date().toISOString().split('T')[0],
-      image: '',
-    })
-  }
-}
-
 
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-8">
@@ -89,6 +106,7 @@ const blogToInsert = Object.fromEntries(
         <Input name="title" placeholder="Title" value={newBlog.title} onChange={handleChange} />
         <Input name="author" placeholder="Author" value={newBlog.author} onChange={handleChange} />
         <Input name="category" placeholder="Category" value={newBlog.category} onChange={handleChange} />
+        <Input name="excerpt" placeholder="Excerpt (optional)" value={newBlog.excerpt} onChange={handleChange} />
         <Input name="image" placeholder="Image URL (optional)" value={newBlog.image} onChange={handleChange} />
         <textarea
           name="content"
@@ -117,6 +135,7 @@ const blogToInsert = Object.fromEntries(
                   className="w-full h-auto object-cover rounded mb-2"
                 />
               )}
+              <p>{post.excerpt}</p>
               <p>{post.content}</p>
             </div>
           ))}
@@ -127,6 +146,7 @@ const blogToInsert = Object.fromEntries(
 }
 
 export default BlogPage
+
 
 
 
