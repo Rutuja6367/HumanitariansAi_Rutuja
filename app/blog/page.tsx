@@ -49,31 +49,37 @@ const BlogPage = () => {
     setNewBlog((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSubmit = async () => {
-    if (!newBlog.title || !newBlog.content || !newBlog.category || !newBlog.author) {
-      alert('Please fill in all required fields.')
-      return
-    }
-
-    const { data, error } = await supabase
-      .from('blogs')
-      .insert([{ ...newBlog }])
-      .select()
-
-    if (error) {
-      console.error('Insert error:', error)
-    } else {
-      setBlogPosts((prev) => [data[0], ...prev])
-      setNewBlog({
-        title: '',
-        content: '',
-        category: '',
-        author: '',
-        date: new Date().toISOString().split('T')[0],
-        image: '',
-      })
-    }
+const handleSubmit = async () => {
+  if (!newBlog.title || !newBlog.content || !newBlog.category || !newBlog.author) {
+    alert('Please fill in all required fields.')
+    return
   }
+
+const blogToInsert = Object.fromEntries(
+  Object.entries(newBlog).filter(([_, v]) => v !== undefined)
+)
+
+
+  const { data, error } = await supabase
+    .from('blogs')
+    .insert([blogToInsert])
+    .select()
+
+  if (error) {
+    console.error('Insert error:', error)
+  } else {
+    setBlogPosts((prev) => [data[0], ...prev])
+    setNewBlog({
+      title: '',
+      content: '',
+      category: '',
+      author: '',
+      date: new Date().toISOString().split('T')[0],
+      image: '',
+    })
+  }
+}
+
 
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-8">
