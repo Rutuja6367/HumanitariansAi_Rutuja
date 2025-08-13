@@ -1,64 +1,43 @@
 'use client'
 
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import dynamic from 'next/dynamic'
-import DOMPurify from 'dompurify'
+import React, { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-
-// IMPORTANT: react-quill is client-only; load it dynamically
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false })
-import 'react-quill/dist/quill.snow.css'
 
 interface BlogPost {
   id?: number
   title: string
   slug: string
-  content: string // HTML from Quill
+  content: string
   category: string
   author: string
   date: string
   excerpt?: string
-  image?: string // cover image URL
+  image?: string
 }
 
-const COVER_BUCKET = 'blog-images'
-const MEDIA_BUCKET = 'blog-media' // ensure this bucket exists + policies
-
-// dropdown options (replace with DB-backed later)
-const CATEGORY_OPTIONS = ['education', 'healthcare', 'social', 'technology', 'research']
-const AUTHOR_OPTIONS = ['Jane Smith', 'Alex Johnson', 'Taylor Lee']
-
-const formats = [
-  'header',
-  'bold', 'italic', 'underline', 'strike',
-  'list', 'bullet',
-  'blockquote', 'code-block',
-  'link', 'image', 'video',
-  'align'
-]
+const BUCKET = 'blog-images'
 
 const BlogPage = () => {
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>([])
+  const [newBlog, setNewBlog] = useState<BlogPost>({
+    title: '',
+    slug: '',
+    content: '',
+    category: '',
+    author: '',
+    date: new Date().toISOString().split('T')[0],
+    excerpt: '',
+    image: '',
+  })
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [file, setFile] = useState<File | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
-  const [title, setTitle] = useState('')
-  const [slug, setSlug] = useState('')
-  const [author, setAuthor] = useState(AUTHOR_OPTIONS[0] || '')
-  const [category, setCategory] = useState(CATEGORY_OPTIONS[0] || '')
-  const [excerpt, setExcerpt] = useState('')
-  const [content, setContent] = useState<string>('') // HTML
-  const [coverFile, setCoverFile] = useState<File | null>(null)
-  const [coverUrl, setCoverUrl] = useState<string>('') // optional manual URL
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0])
-
-  const quillRef = useRef<any>(null)
-
-  // Load posts
+  // Fetch blogs
   useEffect(() => {
     const fetchBlogs = async () => {
       setLoading(true)
@@ -67,6 +46,7 @@ const BlogPage = () => {
         .from('blogs')
         .select('*')
         .order('date', { ascending: false })
+
       if (error) setErrorMsg(error.message)
       else setBlogPosts((data || []) as BlogPost[])
       setLoading(false)
@@ -74,192 +54,135 @@ const BlogPage = () => {
     fetchBlogs()
   }, [])
 
-  // slug from title
-  useEffect(() => {
-    setSlug(
-      title
-        .toLowerCase()
-        .trim()
-        .replace(/[^\w\s-]/g, '')
-        .replace(/\s+/g, '-')
-    )
-  }, [title])
+  const generateSlug = (title: string) =>
+    title
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
 
-  // ---------- Storage helpers ----------
-  const uploadToBucket = async ({
-    bucket,
-    file,
-    prefix,
-  }: {
-    bucket: string
-    file: File
-    prefix: string
-  }): Promise<string | null> => {
-    const ext = (file.name.split('.').pop() || 'dat').toLowerCase()
-    const path = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setNewBlog((prev) => ({
+      ...prev,
+      [name]: value,
+      slug: name === 'title' ? generateSlug(value) : prev.slug,
+    }))
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null
+    setFile(f)
+  }
+
+  const uploadImageAndGetUrl = async (file: File, slug: string): Promise<string | null> => {
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const path = `blogs/${slug}-${Date.now()}.${ext}`
 
     const { error: uploadError } = await supabase.storage
-      .from(bucket)
+      .from(BUCKET)
       .upload(path, file, { cacheControl: '3600', upsert: false })
 
     if (uploadError) {
       setErrorMsg(uploadError.message)
       return null
     }
-    const { data } = supabase.storage.from(bucket).getPublicUrl(path)
+
+    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
     return data?.publicUrl ?? null
   }
 
-  // ---------- Quill toolbar & handlers ----------
-  const modules = useMemo(() => {
-    return {
-      toolbar: {
-        container: [
-          [{ header: [1, 2, 3, false] }],
-          ['bold', 'italic', 'underline', 'strike'],
-          [{ list: 'ordered' }, { list: 'bullet' }],
-          ['blockquote', 'code-block'],
-          ['link', 'image', 'video'],
-          [{ align: [] }],
-          ['clean'],
-        ],
-        handlers: {
-          image: async () => {
-            if (!quillRef.current) return
-            const input = document.createElement('input')
-            input.type = 'file'
-            input.accept = 'image/*'
-            input.onchange = async () => {
-              const file = input.files?.[0]
-              if (!file) return
-              const url = await uploadToBucket({
-                bucket: MEDIA_BUCKET,
-                file,
-                prefix: `blogs/${slug || 'post'}/images`,
-              })
-              if (!url) return
-              const quill = quillRef.current.getEditor()
-              const range = quill.getSelection(true)
-              quill.insertEmbed(range.index, 'image', url, 'user')
-              quill.setSelection(range.index + 1, 0)
-            }
-            input.click()
-          },
-          video: async () => {
-            if (!quillRef.current) return
-            const input = document.createElement('input')
-            input.type = 'file'
-            input.accept = 'video/*'
-            input.onchange = async () => {
-              const file = input.files?.[0]
-              if (!file) return
-              const url = await uploadToBucket({
-                bucket: MEDIA_BUCKET,
-                file,
-                prefix: `blogs/${slug || 'post'}/videos`,
-              })
-              if (!url) return
-              const quill = quillRef.current.getEditor()
-              const range = quill.getSelection(true)
-
-              // Quill's default 'video' embed expects YouTube/Vimeo.
-              // For direct MP4/WebM, insert a <video> tag instead.
-              const html = `<video src="${url}" controls style="max-width:100%"></video>`
-              quill.clipboard.dangerouslyPasteHTML(range.index, html, 'user')
-              quill.setSelection(range.index + 1, 0)
-            }
-            input.click()
-          },
-        },
-      },
-      clipboard: { matchVisual: true },
-      history: { delay: 500, maxStack: 100, userOnly: true },
-    }
-  }, [slug])
-
-  // ---------- Submit ----------
-  const isSubmittingDisabled =
-    submitting || !title || !slug || !author || !category || !content
-
   const handleSubmit = async () => {
     setErrorMsg(null)
-    if (isSubmittingDisabled) {
-      setErrorMsg('Please fill all required fields.')
+    const { title, slug, content, category, author, date, excerpt } = newBlog
+
+    if (!title || !slug || !content || !category || !author) {
+      setErrorMsg('Please fill in all required fields (title, slug, content, category, author).')
       return
     }
+
     setSubmitting(true)
 
-    let finalCoverUrl: string | undefined
-    if (coverFile) {
-      const url = await uploadToBucket({
-        bucket: COVER_BUCKET,
-        file: coverFile,
-        prefix: `blogs/${slug || 'post'}/cover`,
-      })
+    let imageUrl: string | undefined
+    if (file) {
+      const url = await uploadImageAndGetUrl(file, slug)
       if (!url) {
         setSubmitting(false)
         return
       }
-      finalCoverUrl = url
-    } else if (coverUrl) {
-      finalCoverUrl = coverUrl
+      imageUrl = url
+    } else if (newBlog.image) {
+      imageUrl = newBlog.image
     }
 
-    // sanitize before saving (optional; or sanitize on render)
-    const safeContent = DOMPurify.sanitize(content, { USE_PROFILES: { html: true } })
-
-    const payload: Omit<BlogPost, 'id'> = {
+    const payload = {
       title,
       slug,
-      author,
+      content,
       category,
-      content: safeContent, // HTML with embedded media
+      author,
       date: date || new Date().toISOString().split('T')[0],
       ...(excerpt ? { excerpt } : {}),
-      ...(finalCoverUrl ? { image: finalCoverUrl } : {}),
+      ...(imageUrl ? { image: imageUrl } : {}),
     }
 
     const { data, error } = await supabase.from('blogs').insert([payload]).select()
+
     setSubmitting(false)
 
     if (error) {
       setErrorMsg(error.message)
       return
     }
+
     if (data && data[0]) {
       setBlogPosts((prev) => [data[0] as BlogPost, ...prev])
-      // reset form
-      setTitle('')
-      setSlug('')
-      setAuthor(AUTHOR_OPTIONS[0] || '')
-      setCategory(CATEGORY_OPTIONS[0] || '')
-      setExcerpt('')
-      setContent('')
-      setCoverFile(null)
-      setCoverUrl('')
-      setDate(new Date().toISOString().split('T')[0])
+      setNewBlog({
+        title: '',
+        slug: '',
+        content: '',
+        category: '',
+        author: '',
+        date: new Date().toISOString().split('T')[0],
+        excerpt: '',
+        image: '',
+      })
+      setFile(null)
     }
   }
 
-  // ---------- Delete ----------
   const handleDelete = async (id?: number) => {
     if (!id) return
-    const yes = window.confirm('Delete this blog post?')
-    if (!yes) return
+    const confirm = window.confirm('Delete this blog post? This cannot be undone.')
+    if (!confirm) return
+
     setDeletingId(id)
+    setErrorMsg(null)
+
+    // Optimistic UI
     const prev = blogPosts
     setBlogPosts((cur) => cur.filter((p) => p.id !== id))
+
     const { error } = await supabase.from('blogs').delete().eq('id', id)
+
     setDeletingId(null)
+
     if (error) {
       setErrorMsg(error.message)
+      // rollback
       setBlogPosts(prev)
     }
   }
 
+  const isSubmittingDisabled = useMemo(
+    () => submitting || !newBlog.title || !newBlog.slug || !newBlog.content || !newBlog.category || !newBlog.author,
+    [submitting, newBlog]
+  )
+
   return (
-    <div className="max-w-5xl mx-auto p-4 space-y-8">
-      <h1 className="text-3xl font-bold">Write a Blog</h1>
+    <div className="max-w-4xl mx-auto p-4 space-y-8">
+      <h1 className="text-3xl font-bold mb-2">Blogs</h1>
+      <p className="text-sm text-gray-500">Create, list, and remove posts. Images are stored in Supabase Storage, and the URL is saved in the table.</p>
 
       {errorMsg && (
         <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -267,111 +190,56 @@ const BlogPage = () => {
         </div>
       )}
 
-      {/* Composer */}
-      <div className="rounded-lg border bg-white dark:bg-gray-900 dark:border-gray-800 p-4 space-y-4">
-        {/* Cover media (image) */}
-        <div className="w-full border rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
-          <div className="flex items-center justify-between">
-            <div className="font-medium">Cover image</div>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)}
-            />
-          </div>
-          <div className="mt-3">
-            <Input
-              placeholder="Or paste a cover image URL"
-              value={coverUrl}
-              onChange={(e) => setCoverUrl(e.target.value)}
-            />
-          </div>
+      <div className="space-y-4 border p-4 rounded-lg bg-gray-100 dark:bg-gray-800">
+        <Input name="title" placeholder="Title *" value={newBlog.title} onChange={handleChange} />
+        {/* Slug is auto-generated from title but editable if needed */}
+        <Input name="slug" placeholder="Slug *" value={newBlog.slug} onChange={handleChange} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Input name="author" placeholder="Author *" value={newBlog.author} onChange={handleChange} />
+          <Input name="category" placeholder="Category *" value={newBlog.category} onChange={handleChange} />
         </div>
-
-        {/* Title */}
-        <Input
-          placeholder="Title *"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="text-xl"
+        <Input name="excerpt" placeholder="Excerpt (optional)" value={newBlog.excerpt} onChange={handleChange} />
+        {/* Either upload a file or paste a URL below */}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="block w-full text-sm file:mr-4 file:py-2 file:px-4
+                     file:rounded file:border-0 file:text-sm file:font-semibold
+                     file:bg-gray-200 file:text-gray-900 hover:file:bg-gray-300
+                     dark:file:bg-gray-700 dark:file:text-gray-100 dark:hover:file:bg-gray-600"
         />
-
-        {/* Meta: author/category/date */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <select
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-            className="border rounded p-2 bg-white dark:bg-gray-900"
-          >
-            {AUTHOR_OPTIONS.map((a) => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
-
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="border rounded p-2 bg-white dark:bg-gray-900"
-          >
-            {CATEGORY_OPTIONS.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-
-          <Input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </div>
-
-        {/* Excerpt */}
         <Input
-          placeholder="Excerpt (optional)"
-          value={excerpt}
-          onChange={(e) => setExcerpt(e.target.value)}
+          name="image"
+          placeholder="Or paste an image URL"
+          value={newBlog.image}
+          onChange={handleChange}
         />
-
-        {/* Rich editor */}
-        <div className="rounded border overflow-hidden">
-          <ReactQuill
-            ref={quillRef}
-            theme="snow"
-            value={content}
-            onChange={setContent}
-            modules={modules}
-            formats={formats}
-            placeholder="Write here. Add images or videos via the toolbar."
-          />
-        </div>
-
-        {/* Slug (editable) */}
-        <Input
-          placeholder="Slug *"
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
+        <textarea
+          name="content"
+          placeholder="Content *"
+          value={newBlog.content}
+          onChange={handleChange}
+          className="w-full p-2 border rounded h-32 resize-y"
         />
-
         <div className="flex gap-3">
-          <Button onClick={handleSubmit} disabled={isSubmittingDisabled}>
-            {submitting ? 'Publishing…' : 'Publish'}
+          <Button disabled={isSubmittingDisabled} onClick={handleSubmit}>
+            {submitting ? 'Saving…' : 'Add Blog'}
           </Button>
         </div>
       </div>
 
-      {/* List of posts */}
-      <h2 className="text-2xl font-semibold">Posts</h2>
       {loading ? (
-        <p className="text-gray-500">Loading…</p>
+        <p className="text-center text-gray-500">Loading blogs...</p>
       ) : (
         <div className="space-y-6">
           {blogPosts.map((post) => (
-            <div key={post.id} className="border rounded-lg p-4">
-              <div className="flex items-start justify-between">
+            <div key={post.id} className="border p-4 rounded shadow">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-lg font-semibold">{post.title}</h3>
-                  <p className="text-sm text-gray-500">
-                    {post.author} • {post.category} • {post.date} • /{post.slug}
+                  <h2 className="text-xl font-semibold">{post.title}</h2>
+                  <p className="text-gray-600 text-sm mb-2">
+                    {post.author} • {post.category} • {post.date} • <span className="text-gray-500">/{post.slug}</span>
                   </p>
                 </div>
                 <Button
@@ -387,15 +255,12 @@ const BlogPage = () => {
                 <img
                   src={post.image}
                   alt={post.title}
-                  className="w-full h-auto object-cover rounded mt-3"
+                  className="w-full h-auto object-cover rounded mb-2"
                 />
               )}
 
-              {/* Sanitize again on render (belt & suspenders) */}
-              <div
-                className="prose dark:prose-invert max-w-none mt-4"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
-              />
+              {post.excerpt && <p className="mb-2">{post.excerpt}</p>}
+              <p>{post.content}</p>
             </div>
           ))}
         </div>
