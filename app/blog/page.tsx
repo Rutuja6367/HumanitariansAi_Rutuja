@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import DOMPurify from 'dompurify'
 import { supabase } from '@/lib/supabaseClient'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -23,11 +24,20 @@ interface BlogPost {
 }
 
 const COVER_BUCKET = 'blog-images'
-const MEDIA_BUCKET = 'blog-media' // create this bucket in Supabase Storage too
+const MEDIA_BUCKET = 'blog-media' // ensure this bucket exists + policies
 
-// dropdown options (you can fetch these from DB later)
+// dropdown options (replace with DB-backed later)
 const CATEGORY_OPTIONS = ['education', 'healthcare', 'social', 'technology', 'research']
 const AUTHOR_OPTIONS = ['Jane Smith', 'Alex Johnson', 'Taylor Lee']
+
+const formats = [
+  'header',
+  'bold', 'italic', 'underline', 'strike',
+  'list', 'bullet',
+  'blockquote', 'code-block',
+  'link', 'image', 'video',
+  'align'
+]
 
 const BlogPage = () => {
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>([])
@@ -151,7 +161,11 @@ const BlogPage = () => {
               if (!url) return
               const quill = quillRef.current.getEditor()
               const range = quill.getSelection(true)
-              quill.insertEmbed(range.index, 'video', url, 'user')
+
+              // Quill's default 'video' embed expects YouTube/Vimeo.
+              // For direct MP4/WebM, insert a <video> tag instead.
+              const html = `<video src="${url}" controls style="max-width:100%"></video>`
+              quill.clipboard.dangerouslyPasteHTML(range.index, html, 'user')
               quill.setSelection(range.index + 1, 0)
             }
             input.click()
@@ -191,12 +205,15 @@ const BlogPage = () => {
       finalCoverUrl = coverUrl
     }
 
+    // sanitize before saving (optional; or sanitize on render)
+    const safeContent = DOMPurify.sanitize(content, { USE_PROFILES: { html: true } })
+
     const payload: Omit<BlogPost, 'id'> = {
       title,
       slug,
       author,
       category,
-      content, // HTML with embedded media
+      content: safeContent, // HTML with embedded media
       date: date || new Date().toISOString().split('T')[0],
       ...(excerpt ? { excerpt } : {}),
       ...(finalCoverUrl ? { image: finalCoverUrl } : {}),
@@ -315,7 +332,7 @@ const BlogPage = () => {
           onChange={(e) => setExcerpt(e.target.value)}
         />
 
-        {/* Rich editor (like LinkedIn) */}
+        {/* Rich editor */}
         <div className="rounded border overflow-hidden">
           <ReactQuill
             ref={quillRef}
@@ -323,7 +340,8 @@ const BlogPage = () => {
             value={content}
             onChange={setContent}
             modules={modules}
-            placeholder="Write here. You can also include @mentions."
+            formats={formats}
+            placeholder="Write here. Add images or videos via the toolbar."
           />
         </div>
 
@@ -373,10 +391,10 @@ const BlogPage = () => {
                 />
               )}
 
-              {/* Render rich HTML safely; for production consider sanitizing */}
+              {/* Sanitize again on render (belt & suspenders) */}
               <div
                 className="prose dark:prose-invert max-w-none mt-4"
-                dangerouslySetInnerHTML={{ __html: post.content }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
               />
             </div>
           ))}
