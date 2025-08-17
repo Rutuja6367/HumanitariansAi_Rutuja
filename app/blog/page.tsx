@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,8 @@ import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
 import Underline from '@tiptap/extension-underline'
 import TextAlign from '@tiptap/extension-text-align'
+import Gapcursor from '@tiptap/extension-gapcursor'
+import Dropcursor from '@tiptap/extension-dropcursor'
 
 type BlogPost = {
   id?: number
@@ -83,9 +85,18 @@ export default function BlogPage() {
       }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder: 'Write here. You can also add images & video.' }),
+      Gapcursor,
+      Dropcursor,
     ],
     content: '',
     autofocus: false,
+    editorProps: {
+      // Make the *ProseMirror root* own the size/border so clicks anywhere focus it
+      attributes: {
+        class:
+          'ProseMirror prose max-w-none p-3 min-h-[220px] border rounded bg-white focus:outline-none',
+      },
+    },
   })
 
   // ---- Supabase upload ----
@@ -217,7 +228,7 @@ export default function BlogPage() {
           onChange={(e) => {
             const v = e.target.value
             if (v === 'p') editor.chain().focus().setParagraph().run()
-            else editor.chain().focus().toggleHeading({ level: Number(v) as 1 | 2 | 3 }).run()
+            else editor.chain().focus().setHeading({ level: Number(v) as 1 | 2 | 3 }).run()
           }}
           defaultValue="p"
         >
@@ -302,9 +313,9 @@ export default function BlogPage() {
 
         {/* Toolbar + Editor (LinkedIn-like) */}
         <Toolbar />
-        <div className="rounded border min-h-[220px]">
-          <EditorContent editor={editor} className="prose max-w-none p-3" />
-        </div>
+
+        {/* Editor — ProseMirror owns the border/height so clicks anywhere focus it */}
+        <EditorContent editor={editor} />
 
         {/* Slug (editable) */}
         <Input placeholder="Slug *" value={slug} onChange={(e) => setSlug(e.target.value)} />
@@ -342,9 +353,20 @@ export default function BlogPage() {
           ))}
         </div>
       )}
+
+      {/* Optional fallback styles if Tailwind Typography isn't loaded */}
+      <style jsx global>{`
+        .ProseMirror { cursor: text; }
+        .ProseMirror:focus { outline: none; }
+        /* Fallback heading sizes (will be overridden by Tailwind Typography if present) */
+        .ProseMirror h1 { font-size: 1.875rem; line-height: 2.25rem; font-weight: 700; }
+        .ProseMirror h2 { font-size: 1.5rem; line-height: 2rem; font-weight: 700; }
+        .ProseMirror h3 { font-size: 1.25rem; line-height: 1.75rem; font-weight: 600; }
+      `}</style>
     </div>
   )
 }
+
 
 
 
